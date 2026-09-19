@@ -1,12 +1,14 @@
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
-
-const { exec } = require('child_process');
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = __dirname;
 const INQUIRIES_FILE = path.join(PUBLIC_DIR, 'inquiries.json');
+const FORMSUBMIT_EMAIL = 'dexter125555@gmail.com';
+const SITE_URL = 'https://test-jose-1212.vercel.app/';
+const SITE_ORIGIN = 'https://test-jose-1212.vercel.app';
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=UTF-8',
@@ -21,50 +23,77 @@ const MIME_TYPES = {
   '.ico': 'image/x-icon'
 };
 
+function dispatchToFormSubmit(emailData) {
+  const payload = JSON.stringify({
+    ...emailData,
+    _captcha: 'false',
+    _template: emailData._template || 'table',
+    _next: SITE_URL,
+    _url: SITE_URL,
+    website: SITE_URL
+  });
+
+  return new Promise((resolve) => {
+    const req = https.request({
+      hostname: 'formsubmit.co',
+      path: `/ajax/${encodeURIComponent(FORMSUBMIT_EMAIL)}`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Origin: SITE_ORIGIN,
+        Referer: SITE_URL
+      }
+    }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        const resText = (data || '').trim();
+        console.log('[EMAIL DISPATCH RESPONSE]', resText);
+        if (resText.includes('needs Activation')) {
+          console.log('[ACTION REQUIRED] FormSubmit sent an activation email to ' + FORMSUBMIT_EMAIL + '. Open Gmail and click Activate Form once.');
+        }
+        resolve(resText);
+      });
+    });
+
+    req.on('error', (err) => {
+      console.error('[EMAIL DISPATCH WARNING]', err.message);
+      resolve('');
+    });
+    req.write(payload);
+    req.end();
+  });
+}
+
 // Helper: Save and Dispatch Inquiry in Background
 function saveAndDispatchInquiry(record) {
+  const { skipDispatch, ...storedRecord } = record;
   let list = [];
   if (fs.existsSync(INQUIRIES_FILE)) {
     try { list = JSON.parse(fs.readFileSync(INQUIRIES_FILE, 'utf8')); } catch (e) { list = []; }
   }
-  list.push(record);
+  list.push(storedRecord);
   fs.writeFileSync(INQUIRIES_FILE, JSON.stringify(list, null, 2), 'utf8');
-  console.log(`[INQUIRY LOGGED] From: ${record.name} (${record.email}) -> Recipient: dexter125555@gmail.com`);
+  console.log(`[INQUIRY LOGGED] From: ${storedRecord.name} (${storedRecord.email}) -> Recipient: ${FORMSUBMIT_EMAIL}`);
 
-  const tempInquiryFile = path.join(PUBLIC_DIR, `.temp_inq_${record.id}.json`);
-  const clientSubject = `[Proofly Client Inquiry] ${record.name} - ${record.projectType || 'Custom App'} (${record.businessName || 'Business'})`;
-  const emailData = {
-    name: record.name,
-    businessName: record.businessName || 'Proofly Lead',
-    email: record.email,
-    _replyto: record.email,
-    phone: record.phone || 'Not provided',
-    solutionType: record.projectType || 'AI Concierge Inquiry',
-    industry: record.industry || 'General',
-    message: record.message,
-    _subject: clientSubject,
-    _template: 'table',
-    _captcha: 'false'
-  };
+  if (skipDispatch) return;
 
-  try {
-    fs.writeFileSync(tempInquiryFile, JSON.stringify(emailData, null, 2), 'utf8');
-    const cmd = `curl.exe -s -X POST "https://formsubmit.co/ajax/dexter125555@gmail.com" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" -H "Referer: https://test-jose-1212.vercel.app/" -H "Origin: https://test-jose-1212.vercel.app/" -H "Content-Type: application/json" -H "Accept: application/json" --data @"${tempInquiryFile}"`;
-    exec(cmd, (cErr, stdout) => {
-      if (fs.existsSync(tempInquiryFile)) fs.unlinkSync(tempInquiryFile);
-      if (cErr) {
-        console.error('[EMAIL DISPATCH WARNING]', cErr.message);
-      } else {
-        const resText = (stdout || '').trim();
-        console.log('[EMAIL DISPATCH RESPONSE]', resText);
-        if (resText.includes('needs Activation')) {
-          console.log('[ACTION REQUIRED] FormSubmit sent an activation email to dexter125555@gmail.com. Please open Gmail and click "Activate Form" once to start receiving inquiries.');
-        }
-      }
-    });
-  } catch (dispatchErr) {
-    console.error('[DISPATCH FILE ERROR]', dispatchErr.message);
-  }
+  const replyTo = /@/.test(storedRecord.email || '') ? storedRecord.email : FORMSUBMIT_EMAIL;
+  const clientSubject = `[My Mobile Apps Inquiry] ${storedRecord.name} - ${storedRecord.projectType || 'Custom App'} (${storedRecord.businessName || 'Business'})`;
+  dispatchToFormSubmit({
+    name: storedRecord.name,
+    businessName: storedRecord.businessName || 'My Mobile Apps Lead',
+    email: replyTo,
+    _replyto: replyTo,
+    phone: storedRecord.phone || 'Not provided',
+    solutionType: storedRecord.projectType || 'Website Inquiry',
+    industry: storedRecord.industry || 'General',
+    message: storedRecord.message,
+    _subject: clientSubject
+  });
 }
 
 // 100% Free Forever Self-Contained Knowledge Engine (ChatGPT-Style Response Engine)
@@ -399,7 +428,7 @@ const server = http.createServer((req, res) => {
             timestamp: new Date().toISOString(),
             recipient: 'dexter125555@gmail.com',
             consultant: 'Jose Rene Navarro (dexter125555@gmail.com)',
-            source: 'Proofly AI Chatbot Concierge',
+            source: 'My Mobile Apps Chat',
             name: clientLead.name || 'Chatbot Visitor',
             email: clientLead.email || (aiResponse.leadData ? aiResponse.leadData.email : 'Captured in chat'),
             phone: clientLead.phone || (aiResponse.leadData ? aiResponse.leadData.phone : 'Not provided'),

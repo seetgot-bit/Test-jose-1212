@@ -45,6 +45,33 @@
   <script type="text/babel">
     const { useState, useEffect, useMemo, useRef } = React;
 
+    const SITE_URL = 'https://test-jose-1212.vercel.app/';
+    const FORMSUBMIT_ENDPOINT = 'https://formsubmit.co/ajax/dexter125555@gmail.com';
+
+    async function sendFormSubmit(fields) {
+      const res = await fetch(FORMSUBMIT_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          _captcha: 'false',
+          _template: 'table',
+          _next: SITE_URL,
+          _url: SITE_URL,
+          website: SITE_URL,
+          ...fields
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      const ok = data.success === true || data.success === 'true';
+      if (!ok) {
+        const msg = (data && data.message) || 'FormSubmit did not accept this inquiry.';
+        const err = new Error(msg);
+        err.needsActivation = /activat/i.test(msg);
+        throw err;
+      }
+      return data;
+    }
+
     // =========================================================================
     // Bespoke Vector Icon Library
     // =========================================================================
@@ -2197,24 +2224,34 @@
         };
 
         try {
-          const res = await fetch('/api/contact', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+          await sendFormSubmit({
+            name,
+            businessName,
+            email,
+            _replyto: email,
+            phone: phone || 'Not provided',
+            projectType,
+            industry,
+            message,
+            _subject: `[My Mobile Apps Inquiry] ${name} - ${projectType} (${businessName})`
           });
 
-          const data = await res.json();
-          if (data.success) {
-            setSending(false);
-            setSubmitted(true);
-          } else {
-            throw new Error(data.error || 'Server submission issue');
-          }
-        } catch (err) {
-          console.warn('Backend notice:', err);
-          // Still show confirmed submission since server logs or can retry
-          setSending(false);
+          fetch('/api/contact', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...payload, skipDispatch: true })
+          }).catch(() => {});
+
           setSubmitted(true);
+        } catch (err) {
+          console.warn('FormSubmit notice:', err);
+          setErrorMessage(
+            err.needsActivation
+              ? 'FormSubmit sent an activation email to dexter125555@gmail.com. Open that email, click Activate Form, then submit again.'
+              : (err.message || 'Could not send your inquiry. Please email dexter125555@gmail.com or call (437) 423-3456.')
+          );
+        } finally {
+          setSending(false);
         }
       };
 
@@ -2502,6 +2539,12 @@
                         className="w-full p-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
                       ></textarea>
                     </div>
+
+                    {errorMessage ? (
+                      <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs leading-relaxed">
+                        {errorMessage}
+                      </div>
+                    ) : null}
 
                     <button
                       type="submit"
@@ -2891,16 +2934,14 @@
           // If lead captured, dispatch directly to Jose's email in background
           if (aiData.capturedLead && aiData.leadData) {
             try {
-              fetch('https://formsubmit.co/ajax/dexter125555@gmail.com', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify({
-                  name: 'Chatbot Visitor',
-                  email: aiData.leadData.email || 'Provided in chat',
-                  phone: aiData.leadData.phone || 'Provided in chat',
-                  message: `[PROOFLY AI CHAT INQUIRY]\n${text}`,
-                  _subject: 'New Proofly Chat Inquiry from ' + (aiData.leadData.email || aiData.leadData.phone || 'Visitor')
-                })
+              const leadEmail = /@/.test(aiData.leadData.email || '') ? aiData.leadData.email : 'dexter125555@gmail.com';
+              sendFormSubmit({
+                name: 'Website Chat Visitor',
+                email: leadEmail,
+                _replyto: leadEmail,
+                phone: aiData.leadData.phone || 'Provided in chat',
+                message: `[My Mobile Apps Chat Inquiry]\n${text}`,
+                _subject: 'New My Mobile Apps chat inquiry from ' + (aiData.leadData.email || aiData.leadData.phone || 'Visitor')
               }).catch(() => {});
             } catch (leadErr) {}
           }
