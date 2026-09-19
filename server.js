@@ -49,7 +49,7 @@ function saveAndDispatchInquiry(record) {
 
   try {
     fs.writeFileSync(tempInquiryFile, JSON.stringify(emailData, null, 2), 'utf8');
-    const cmd = `curl.exe -s -X POST "https://formsubmit.co/ajax/dexter125555@gmail.com" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" -H "Referer: https://proofly.ca" -H "Origin: https://proofly.ca" -H "Content-Type: application/json" -H "Accept: application/json" --data @"${tempInquiryFile}"`;
+    const cmd = `curl.exe -s -X POST "https://formsubmit.co/ajax/dexter125555@gmail.com" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" -H "Referer: https://test-jose-1212.vercel.app/" -H "Origin: https://test-jose-1212.vercel.app/" -H "Content-Type: application/json" -H "Accept: application/json" --data @"${tempInquiryFile}"`;
     exec(cmd, (cErr, stdout) => {
       if (fs.existsSync(tempInquiryFile)) fs.unlinkSync(tempInquiryFile);
       if (cErr) {
